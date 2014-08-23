@@ -83,6 +83,8 @@ var Kalendae = function (targetElement, options) {
 		self.viewStartDate = moment(self.viewStartDate).subtract({M:viewDelta}).date(1);
 	}
 
+	// store the view that the calendar initialized with in-case we want to reset.
+	self.defaultView = moment(self.viewStartDate);
 
 	if (typeof opts.blackout === 'function') {
 		self.blackout = opts.blackout;
@@ -892,7 +894,16 @@ Kalendae.Input = function (targetElement, options) {
 
 	this._events.inputKeyup = util.addEvent($input, 'keyup', function (event) {
 		changing = true; // prevent setSelected from altering the input contents.
-		self.setSelected(this.value);
+		var dateValue = parseDates(this.value, self.settings.parseSplitDelimiter, self.settings.format);
+
+		// If the date in the field is parsable as a valid date, update.  Otherwise deselect and show default view.
+		if (dateValue && dateValue.length && dateValue[0] && dateValue[0].year > 1000) {
+			self.setSelected(this.value);
+		} else {
+			self.setSelected('', null);
+			self.viewStartDate = moment(self.defaultView);
+			self.draw();
+		}
 		changing = false;
 	});
 
@@ -937,26 +948,27 @@ Kalendae.Input.prototype = util.merge(Kalendae.prototype, {
 			pos = util.getPosition($input),
 			$scrollContainer = util.scrollContainer($input),
 			scrollTop = $scrollContainer ? $scrollContainer.scrollTop : 0,
+			scrollLeft = $scrollContainer ? $scrollContainer.scrollLeft : 0,
 			opts = this.settings;
 
 		style.display = '';
 		switch (opts.side) {
 			case 'left':
-				style.left = (pos.left - util.getWidth($container) + opts.offsetLeft) + 'px';
+				style.left = (pos.left - util.getWidth($container) + opts.offsetLeft - scrollLeft) + 'px';
 				style.top  = (pos.top + opts.offsetTop - scrollTop) + 'px';
 				break;
 			case 'right':
-				style.left = (pos.left + util.getWidth($input)) + 'px';
+				style.left = (pos.left + util.getWidth($input) - scrollLeft) + 'px';
 				style.top  = (pos.top + opts.offsetTop - scrollTop) + 'px';
 				break;
 			case 'top':
-				style.left = (pos.left + opts.offsetLeft) + 'px';
+				style.left = (pos.left + opts.offsetLeft - scrollLeft) + 'px';
 				style.top  = (pos.top - util.getHeight($container) + opts.offsetTop - scrollTop) + 'px';
 				break;
 			case 'bottom':
 				/* falls through */
 			default:
-				style.left = (pos.left + opts.offsetLeft) + 'px';
+				style.left = (pos.left + opts.offsetLeft - scrollLeft) + 'px';
 				style.top  = (pos.top + util.getHeight($input) + opts.offsetTop - scrollTop) + 'px';
 				break;
 		}
@@ -2763,16 +2775,15 @@ moment.fn.yearDay = function (input) {
 };
 
 today = Kalendae.moment().startOf('day');
-
 if (typeof jQuery !== 'undefined' && (typeof document.addEventListener === 'function' || util.isIE8())) {
 	jQuery.fn.kalendae = function (options) {
 		this.each(function (i, e) {
 			if (e.tagName === 'INPUT') {
 				//if element is an input, bind a popup calendar to the input.
-				$(e).data('kalendae', new Kalendae.Input(e, options));
+				jQuery(e).data('kalendae', new Kalendae.Input(e, options));
 			} else {
 				//otherwise, insert a flat calendar into the element.
-				$(e).data('kalendae', new Kalendae($.extend({}, {attachTo:e}, options)));
+				jQuery(e).data('kalendae', new Kalendae(jQuery.extend({}, {attachTo:e}, options)));
 			}
 		});
 		return this;
